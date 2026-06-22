@@ -1,124 +1,202 @@
 import tkinter as tk
 from datetime import datetime
-import math
+import random
+
+SIMS_GREEN     = "#5ec400"
+SIMS_GLOW_MID  = "#2d6e00"
+SIMS_GLOW_OUT  = "#0d2a00"
+SIMS_HIGHLIGHT = "#aaee40"
+SIMS_TOPLINE   = "#e8ff90"
+SIMS_SHINE     = "#d0f870"
+SIMS_BG        = "#040803"
+SIMS_PANEL     = "#060c02"
+SIMS_BORDER    = "#1c3c08"
+
+BAR_LEFT  = 14
+BAR_RIGHT = 386
+BAR_TOP   = 36
+BAR_BOT   = 54
+BAR_WIDTH = BAR_RIGHT - BAR_LEFT
+
 
 class BarraWidget:
     def __init__(self, root):
         self.root = root
-        self.root.geometry("380x50")
-        self.root.configure(bg="#0f1419")
+        self.root.geometry("400x80")
+        self.root.configure(bg=SIMS_BG)
         self.root.attributes('-topmost', True)
-        self.root.overrideredirect(True)  # Remove barra de título
+        self.root.overrideredirect(True)
         self.root.resizable(False, False)
-
-        # Remove borda padrão
         self.root.config(relief=tk.FLAT, bd=0)
 
-        # Frame principal com gradient simulado
-        main_frame = tk.Frame(root, bg="#0f1419")
-        main_frame.pack(fill=tk.BOTH, expand=True)
-
-        # Container com padding
-        container = tk.Frame(main_frame, bg="#0f1419", padx=8, pady=6)
-        container.pack(fill=tk.BOTH, expand=True)
-
-
-        # Barra principal com canvas
-        barra_bg = tk.Frame(container, bg="#1a1f26", height=12)
-        barra_bg.pack(fill=tk.X, pady=(0, 4), ipady=3)
-        barra_bg.pack_propagate(False)
-
-        # Canvas para barra com gradiente
         self.canvas = tk.Canvas(
-            barra_bg,
-            width=364,
-            height=10,
-            bg="#1a1f26",
-            highlightthickness=0,
-            relief=tk.FLAT,
-            bd=0
+            root, width=400, height=80,
+            bg=SIMS_BG, highlightthickness=0, bd=0
         )
-        self.canvas.pack(padx=0, pady=1)
+        self.canvas.pack()
 
-        # Barra de progresso (gradiente de verde/grama)
-        self.barra_rect = self.canvas.create_rectangle(
-            0, 0, 0, 10,
-            fill="#2d5016",
-            outline="#2d5016"
-        )
+        self._criar_fundo()
+        self._criar_barra()
+        self._criar_labels()
 
-        # Brilho dinâmico para animação
-        self.barra_shine = self.canvas.create_rectangle(
-            0, 0, 20, 10,
-            fill="#7ec850",
-            outline="#7ec850"
-        )
-
-        # Info frame com estatísticas
-        info_frame = tk.Frame(container, bg="#0f1419")
-        info_frame.pack(fill=tk.X, pady=(2, 0))
-
-        # Percentual
-        self.label_percentual = tk.Label(
-            info_frame,
-            text="0%",
-            font=("Helvetica", 10, "bold"),
-            bg="#0f1419",
-            fg="#4a7c2d"
-        )
-        self.label_percentual.pack(side=tk.LEFT)
-
-        # Hora
-        self.label_hora = tk.Label(
-            info_frame,
-            text="--:--",
-            font=("Helvetica", 9),
-            bg="#0f1419",
-            fg="#888888"
-        )
-        self.label_hora.pack(side=tk.RIGHT)
-
-        # Animação de brilho
-        self.shine_pos = 0
-        self.shine_direction = 1
+        self.shine_pos = -25
         self.largura_barra_atual = 0
+        self.sparkles = []
 
-        # Começar a atualizar
         self.atualizar()
-        self.animar_brilho()
+        self.animar()
 
-        # Permitir arrastar a janela
         self.root.bind('<Button-1>', self.drag_start)
         self.root.bind('<B1-Motion>', self.drag_motion)
         self.drag_data = {'x': 0, 'y': 0}
 
-    def animar_brilho(self):
-        """Anima o brilho se movendo apenas na parte preenchida"""
-        # Só animar se há progresso
-        if self.largura_barra_atual <= 0:
-            self.canvas.coords(self.barra_shine, 0, 0, 0, 10)
-            self.root.after(50, self.animar_brilho)
-            return
+    def _criar_fundo(self):
+        self.canvas.create_rectangle(0, 0, 400, 80, fill=SIMS_BG, outline="")
+        # Painel externo
+        self.canvas.create_rectangle(8, 28, 392, 62, fill=SIMS_PANEL, outline=SIMS_BORDER, width=1)
+        # Painel interno mais escuro
+        self.canvas.create_rectangle(10, 30, 390, 60, fill="#030601", outline="#0e2204")
 
-        # Atualizar posição do brilho
-        self.shine_pos += self.shine_direction * 6
+    def _criar_barra(self):
+        # Background da barra
+        self.canvas.create_rectangle(BAR_LEFT, BAR_TOP, BAR_RIGHT, BAR_BOT, fill="#020600", outline="")
 
-        # Inverter direção ao chegar nas extremidades da barra preenchida
-        if self.shine_pos > self.largura_barra_atual - 30 or self.shine_pos < 0:
-            self.shine_direction *= -1
-
-        # Colocar o brilho dentro dos limites da barra preenchida
-        self.shine_pos = max(0, min(self.shine_pos, self.largura_barra_atual - 20))
-
-        # Atualizar posição do brilho no canvas (só dentro da barra preenchida)
-        self.canvas.coords(
-            self.barra_shine,
-            self.shine_pos, 0,
-            min(self.shine_pos + 30, self.largura_barra_atual), 10
+        # Glow externo (extravasa acima e abaixo da barra)
+        self.glow_out = self.canvas.create_rectangle(
+            BAR_LEFT, BAR_TOP - 4, BAR_LEFT, BAR_BOT + 4,
+            fill=SIMS_GLOW_OUT, outline=""
+        )
+        # Glow médio
+        self.glow_mid = self.canvas.create_rectangle(
+            BAR_LEFT, BAR_TOP - 2, BAR_LEFT, BAR_BOT + 2,
+            fill=SIMS_GLOW_MID, outline=""
+        )
+        # Barra principal
+        self.barra = self.canvas.create_rectangle(
+            BAR_LEFT, BAR_TOP, BAR_LEFT, BAR_BOT,
+            fill=SIMS_GREEN, outline=""
+        )
+        # Sombra na base (dá profundidade)
+        self.shadow = self.canvas.create_rectangle(
+            BAR_LEFT, BAR_BOT - 4, BAR_LEFT, BAR_BOT,
+            fill="#2a6000", outline=""
+        )
+        # Highlight no topo
+        self.highlight = self.canvas.create_rectangle(
+            BAR_LEFT, BAR_TOP, BAR_LEFT, BAR_TOP + 5,
+            fill=SIMS_HIGHLIGHT, outline=""
+        )
+        # Linha fina brilhante no topo
+        self.topline = self.canvas.create_rectangle(
+            BAR_LEFT, BAR_TOP, BAR_LEFT, BAR_TOP + 2,
+            fill=SIMS_TOPLINE, outline=""
+        )
+        # Borda brilhante na ponta da barra (leading edge)
+        self.leading_edge = self.canvas.create_rectangle(
+            0, 0, 0, 0, fill="#ffffff", outline=""
+        )
+        # Shine animado
+        self.shine = self.canvas.create_rectangle(
+            0, 0, 0, 0, fill=SIMS_SHINE, outline=""
         )
 
-        # Agendar próxima animação
-        self.root.after(50, self.animar_brilho)
+    def _criar_labels(self):
+        self.lbl_perc = self.canvas.create_text(
+            14, 16, text="0%",
+            fill="#78d020", font=("Verdana", 8, "bold"), anchor="w"
+        )
+        self.lbl_hora = self.canvas.create_text(
+            386, 16, text="--:--",
+            fill="#4a8015", font=("Verdana", 8), anchor="e"
+        )
+        self.lbl_status = self.canvas.create_text(
+            200, 70, text="Carregando...",
+            fill="#2e5a0a", font=("Verdana", 7), anchor="center"
+        )
+
+    def animar(self):
+        if self.largura_barra_atual > 10:
+            # Mover shine da esquerda para a direita e reiniciar
+            self.shine_pos += 5
+            if self.shine_pos > self.largura_barra_atual + 30:
+                self.shine_pos = -30
+
+            s1 = BAR_LEFT + self.shine_pos - 18
+            s2 = BAR_LEFT + self.shine_pos + 18
+            s1 = max(BAR_LEFT, s1)
+            s2 = min(BAR_LEFT + self.largura_barra_atual, s2)
+            if s2 > s1:
+                self.canvas.coords(self.shine, s1, BAR_TOP, s2, BAR_BOT)
+            else:
+                self.canvas.coords(self.shine, 0, 0, 0, 0)
+
+            # Criar sparkles aleatórios
+            if random.random() < 0.22 and self.largura_barra_atual > 15:
+                x = BAR_LEFT + random.randint(3, int(self.largura_barra_atual) - 3)
+                y = random.randint(BAR_TOP + 2, BAR_BOT - 2)
+                sz = random.randint(1, 2)
+                item = self.canvas.create_oval(
+                    x - sz, y - sz, x + sz, y + sz,
+                    fill="#c8ff50", outline=""
+                )
+                self.sparkles.append([item, random.randint(6, 18)])
+
+            # Envelhecer e remover sparkles
+            vivos = []
+            for s in self.sparkles:
+                s[1] -= 1
+                if s[1] <= 0:
+                    self.canvas.delete(s[0])
+                else:
+                    vivos.append(s)
+            self.sparkles = vivos
+        else:
+            self.canvas.coords(self.shine, 0, 0, 0, 0)
+
+        self.root.after(50, self.animar)
+
+    def atualizar(self):
+        agora = datetime.now()
+        hora   = agora.hour
+        minuto = agora.minute
+
+        minuto_atual = hora * 60 + minuto
+        inicio   = 13 * 60
+        fim      = 16 * 60 + 50
+        duracao  = fim - inicio
+
+        self.canvas.itemconfig(self.lbl_hora, text=f"{hora:02d}:{minuto:02d}")
+
+        if minuto_atual < inicio:
+            percentual = 0
+            status = "Aguardando início..."
+        elif minuto_atual >= fim:
+            percentual = 100
+            status = "Concluído!"
+        else:
+            percentual = int(((minuto_atual - inicio) / duracao) * 100)
+            status = "Carregando..."
+
+        largura = (percentual / 100) * BAR_WIDTH
+        self.largura_barra_atual = largura
+        x2 = BAR_LEFT + largura
+
+        self.canvas.coords(self.glow_out,   BAR_LEFT, BAR_TOP - 4, x2, BAR_BOT + 4)
+        self.canvas.coords(self.glow_mid,   BAR_LEFT, BAR_TOP - 2, x2, BAR_BOT + 2)
+        self.canvas.coords(self.barra,      BAR_LEFT, BAR_TOP,     x2, BAR_BOT)
+        self.canvas.coords(self.shadow,     BAR_LEFT, BAR_BOT - 4, x2, BAR_BOT)
+        self.canvas.coords(self.highlight,  BAR_LEFT, BAR_TOP,     x2, BAR_TOP + 5)
+        self.canvas.coords(self.topline,    BAR_LEFT, BAR_TOP,     x2, BAR_TOP + 2)
+
+        if largura > 4:
+            self.canvas.coords(self.leading_edge, x2 - 3, BAR_TOP - 4, x2, BAR_BOT + 4)
+        else:
+            self.canvas.coords(self.leading_edge, 0, 0, 0, 0)
+
+        self.canvas.itemconfig(self.lbl_perc,   text=f"{percentual}%")
+        self.canvas.itemconfig(self.lbl_status, text=status)
+
+        self.root.after(1000, self.atualizar)
 
     def drag_start(self, event):
         self.drag_data['x'] = event.x
@@ -131,50 +209,6 @@ class BarraWidget:
         y = self.root.winfo_y() + delta_y
         self.root.geometry(f'+{x}+{y}')
 
-    def atualizar(self):
-        agora = datetime.now()
-        hora = agora.hour
-        minuto = agora.minute
-
-        minuto_atual = hora * 60 + minuto
-        inicio = 13 * 60  # 13:00
-        fim = 16 * 60 + 50  # 16:50
-        duracao = fim - inicio
-
-        # Hora formatada
-        hora_str = f"{hora:02d}:{minuto:02d}"
-        self.label_hora.config(text=hora_str)
-
-        # Calcular percentual
-        if minuto_atual < inicio:
-            percentual = 0
-            cor_texto = "#888888"
-        elif minuto_atual >= fim:
-            percentual = 100
-            cor_texto = "#4a9d83"
-        else:
-            tempo_decorrido = minuto_atual - inicio
-            percentual = int((tempo_decorrido / duracao) * 100)
-            cor_texto = "#6ba644"
-
-        # Atualizar barra (largura máxima é 364)
-        largura_barra = (percentual / 100) * 364
-        self.largura_barra_atual = largura_barra
-        self.canvas.coords(self.barra_rect, 0, 0, largura_barra, 10)
-
-        # Gradiente de cor conforme progride
-        if percentual <= 100:
-            r = int(45 + (107 - 45) * (percentual / 100))
-            g = int(80 + (166 - 80) * (percentual / 100))
-            b = int(22 + (68 - 22) * (percentual / 100))
-            cor_dinamica = f'#{r:02x}{g:02x}{b:02x}'
-            self.canvas.itemconfig(self.barra_rect, fill=cor_dinamica)
-
-        # Atualizar labels
-        self.label_percentual.config(text=f"{percentual}%", fg=cor_texto)
-
-        # Agendar próxima atualização
-        self.root.after(1000, self.atualizar)
 
 if __name__ == "__main__":
     root = tk.Tk()
