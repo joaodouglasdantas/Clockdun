@@ -270,7 +270,7 @@ class BarraIntegral:
         if m < ini_m:
             self.estado = WAITING
             pe, pd = 0, 0
-            status = "Aguardando início  •  aula começa às 08:00"
+            status = "Aguardando início  •  começa às 08:00"
         elif m <= fim_m:
             self.estado = MORNING
             pe = int(((m - ini_m) / (fim_m - ini_m)) * 100)

@@ -211,7 +211,7 @@ class BarraManha:
         if m < inicio:
             self.estado = WAITING
             percentual  = 0
-            status      = "Aguardando início  •  aula começa às 08:00"
+            status      = "Aguardando início  •  começa às 08:00"
         elif m >= fim:
             self.estado = DONE
             percentual  = 100
