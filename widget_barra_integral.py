@@ -2,47 +2,38 @@ import tkinter as tk
 from datetime import datetime
 import random
 
-# --- Fundo e painel ---
+# ── Paleta ──────────────────────────────────────────────────────────
 SIMS_BG     = "#040803"
 SIMS_PANEL  = "#060c02"
 SIMS_BORDER = "#1c3c08"
 
-# --- Amarelo: 08:00–12:00 ---
-YEL_BAR      = "#d4b800"
-YEL_GLOW_OUT = "#2a2200"
-YEL_GLOW_MID = "#5e4e00"
-YEL_HIGHLIGHT= "#fff080"
-YEL_TOPLINE  = "#ffffc0"
-YEL_SHINE    = "#ffff90"
-YEL_SHADOW   = "#604e00"
-YEL_SPARKLE  = "#ffe050"
+YEL = dict(bar="#d4b800", go="#2a2200", gm="#5e4e00",
+           hl="#fff080", tl="#ffffc0", sh="#ffff90", sw="#604e00", sp="#ffe050")
+GRN = dict(bar="#5ec400", go="#0d2a00", gm="#2d6e00",
+           hl="#aaee40", tl="#e8ff90", sh="#d0f870", sw="#2a6000", sp="#c8ff50")
+PUR = dict(bar="#8b2fc9", go="#1a0530", gm="#4a1070",
+           hl="#cc88ff", tl="#eebbff", sh="#dd99ff", sw="#3a0a60", sp="#cc77ff")
 
-# --- Verde: 13:00–17:00 ---
-GRN_BAR      = "#5ec400"
-GRN_GLOW_OUT = "#0d2a00"
-GRN_GLOW_MID = "#2d6e00"
-GRN_HIGHLIGHT= "#aaee40"
-GRN_TOPLINE  = "#e8ff90"
-GRN_SHINE    = "#d0f870"
-GRN_SHADOW   = "#2a6000"
-GRN_SPARKLE  = "#c8ff50"
+# ── Estados ─────────────────────────────────────────────────────────
+WAITING, MORNING, BREAK, AFTERNOON, DONE = "waiting","morning","break","afternoon","done"
+PURPLE_STATES = {WAITING, BREAK, DONE}
 
-# --- Geometria ---
-W, H     = 420, 80
-BAR_TOP  = 36
-BAR_BOT  = 54
+# ── Geometria ───────────────────────────────────────────────────────
+W, H           = 420, 80
+BAR_TOP, BAR_BOT = 36, 54
 
-L_LEFT   = 14
-L_RIGHT  = 196
-L_WIDTH  = L_RIGHT - L_LEFT   # 182 px
+L_LEFT, L_RIGHT = 14, 196
+R_LEFT, R_RIGHT = 224, 406
+L_WIDTH = L_RIGHT - L_LEFT   # 182 px
+R_WIDTH = R_RIGHT - R_LEFT   # 182 px
 
-R_LEFT   = 224
-R_RIGHT  = 406
-R_WIDTH  = R_RIGHT - R_LEFT   # 182 px
+P_LEFT, P_RIGHT = L_LEFT, R_RIGHT
+P_WIDTH = P_RIGHT - P_LEFT   # 392 px
 
-# Centro do separador
-SEP_CX = (L_RIGHT + R_LEFT) // 2  # 210
+SEP_CX = (L_RIGHT + R_LEFT) // 2   # 210
 SEP_CY = (BAR_TOP + BAR_BOT) // 2  # 45
+
+ANIM_KEYS = ('glow_out','glow_mid','barra','shadow','highlight','topline','edge','shine')
 
 
 class BarraIntegral:
@@ -55,25 +46,31 @@ class BarraIntegral:
         self.root.resizable(False, False)
         self.root.config(relief=tk.FLAT, bd=0)
 
-        self.canvas = tk.Canvas(
-            root, width=W, height=H,
-            bg=SIMS_BG, highlightthickness=0, bd=0
-        )
+        self.canvas = tk.Canvas(root, width=W, height=H,
+                                bg=SIMS_BG, highlightthickness=0, bd=0)
         self.canvas.pack()
 
+        # Z-order de criação: fundo → esq → dir → sep → pur → labels
+        # pur acima de esq/dir; pur oculto = esq/dir aparecem; sep oculto durante roxo
         self._criar_fundo()
-        self.esq = self._criar_metade(L_LEFT, L_RIGHT, YEL_BAR, YEL_GLOW_OUT, YEL_GLOW_MID,
-                                      YEL_HIGHLIGHT, YEL_TOPLINE, YEL_SHINE, YEL_SHADOW)
-        self.dir = self._criar_metade(R_LEFT, R_RIGHT, GRN_BAR, GRN_GLOW_OUT, GRN_GLOW_MID,
-                                      GRN_HIGHLIGHT, GRN_TOPLINE, GRN_SHINE, GRN_SHADOW)
-        self._criar_separador()
+        self.esq = self._mk_half(L_LEFT, L_RIGHT, YEL, with_bg=True)
+        self.dir = self._mk_half(R_LEFT, R_RIGHT, GRN, with_bg=True)
+        self.sep = self._criar_sep()
+        self.pur = self._mk_half(P_LEFT, P_RIGHT, PUR, with_bg=False)
         self._criar_labels()
 
-        self.shine_l   = -25
-        self.shine_r   = -25
-        self.larg_esq  = 0
-        self.larg_dir  = 0
-        self.sparkles  = []
+        self.estado   = WAITING
+        self.shine_l  = -25.0
+        self.shine_r  = -25.0
+        self.shine_p  = -25.0
+        self.larg_esq = 0.0
+        self.larg_dir = 0.0
+        self.sparkles = []
+
+        # Estado inicial roxo
+        self._set_pur_visible(True)
+        self._set_sep_visible(False)
+        self._set_width(self.pur, P_WIDTH)
 
         self.atualizar()
         self.animar()
@@ -82,116 +79,126 @@ class BarraIntegral:
         self.root.bind('<B1-Motion>', self.drag_motion)
         self.drag_data = {'x': 0, 'y': 0}
 
-    # ------------------------------------------------------------------
+    # ── Construtores ────────────────────────────────────────────────
 
     def _criar_fundo(self):
-        self.canvas.create_rectangle(0, 0, W, H, fill=SIMS_BG, outline="")
-        self.canvas.create_rectangle(8, 28, 412, 62, fill=SIMS_PANEL, outline=SIMS_BORDER, width=1)
-        self.canvas.create_rectangle(10, 30, 410, 60, fill="#030601", outline="#0e2204")
+        c = self.canvas
+        c.create_rectangle(0, 0, W, H, fill=SIMS_BG, outline="")
+        c.create_rectangle(8, 28, 412, 62, fill=SIMS_PANEL, outline=SIMS_BORDER, width=1)
+        c.create_rectangle(10, 30, 410, 60, fill="#030601", outline="#0e2204")
 
-    def _criar_metade(self, xl, xr, bar, go, gm, hl, tl, sh, sw):
-        """Cria as camadas de uma metade da barra e retorna dict de items."""
-        self.canvas.create_rectangle(xl, BAR_TOP, xr, BAR_BOT, fill="#020600", outline="")
-        items = {
-            'glow_out' : self.canvas.create_rectangle(xl, BAR_TOP-4, xl, BAR_BOT+4, fill=go, outline=""),
-            'glow_mid' : self.canvas.create_rectangle(xl, BAR_TOP-2, xl, BAR_BOT+2, fill=gm, outline=""),
-            'barra'    : self.canvas.create_rectangle(xl, BAR_TOP,   xl, BAR_BOT,   fill=bar, outline=""),
-            'shadow'   : self.canvas.create_rectangle(xl, BAR_BOT-4, xl, BAR_BOT,   fill=sw, outline=""),
-            'highlight': self.canvas.create_rectangle(xl, BAR_TOP,   xl, BAR_TOP+5, fill=hl, outline=""),
-            'topline'  : self.canvas.create_rectangle(xl, BAR_TOP,   xl, BAR_TOP+2, fill=tl, outline=""),
-            'edge'     : self.canvas.create_rectangle(0, 0, 0, 0, fill="#ffffff", outline=""),
-            'shine'    : self.canvas.create_rectangle(0, 0, 0, 0, fill=sh, outline=""),
-            'xl': xl,
-        }
-        return items
+    def _mk_half(self, xl, xr, pal, with_bg):
+        c = self.canvas
+        if with_bg:
+            c.create_rectangle(xl, BAR_TOP, xr, BAR_BOT, fill="#020600", outline="")
+        return dict(
+            xl=xl, xr=xr, pal=pal,
+            glow_out =c.create_rectangle(xl, BAR_TOP-4, xl, BAR_BOT+4, fill=pal['go'], outline=""),
+            glow_mid =c.create_rectangle(xl, BAR_TOP-2, xl, BAR_BOT+2, fill=pal['gm'], outline=""),
+            barra    =c.create_rectangle(xl, BAR_TOP,   xl, BAR_BOT,   fill=pal['bar'], outline=""),
+            shadow   =c.create_rectangle(xl, BAR_BOT-4, xl, BAR_BOT,   fill=pal['sw'], outline=""),
+            highlight=c.create_rectangle(xl, BAR_TOP,   xl, BAR_TOP+5, fill=pal['hl'], outline=""),
+            topline  =c.create_rectangle(xl, BAR_TOP,   xl, BAR_TOP+2, fill=pal['tl'], outline=""),
+            edge     =c.create_rectangle(0, 0, 0, 0, fill="#ffffff", outline=""),
+            shine    =c.create_rectangle(0, 0, 0, 0, fill=pal['sh'], outline=""),
+        )
 
-    def _criar_separador(self):
-        """Plumbob (diamante) entre as duas metades."""
-        cx, cy = SEP_CX, SEP_CY
-        s = 9  # meia-diagonal
-        # Sombra
-        self.canvas.create_polygon(cx, cy-s-1, cx+s+1, cy, cx, cy+s+1, cx-s-1, cy,
-                                   fill="#04100a", outline="")
-        # Corpo
-        self.canvas.create_polygon(cx, cy-s, cx+s, cy, cx, cy+s, cx-s, cy,
-                                   fill="#1c3c08", outline="#2e6010", width=1)
-        # Miolo
+    def _criar_sep(self):
+        c, cx, cy, s = self.canvas, SEP_CX, SEP_CY, 9
         h = s // 2
-        self.canvas.create_polygon(cx, cy-h, cx+h, cy, cx, cy+h, cx-h, cy,
-                                   fill="#3a7010", outline="")
-        # Brilho
-        self.canvas.create_oval(cx-2, cy-s+1, cx+2, cy-s+4, fill="#78d020", outline="")
+        return [
+            c.create_polygon(cx, cy-s-1, cx+s+1, cy, cx, cy+s+1, cx-s-1, cy,
+                             fill="#04100a", outline=""),
+            c.create_polygon(cx, cy-s, cx+s, cy, cx, cy+s, cx-s, cy,
+                             fill="#1c3c08", outline="#2e6010", width=1),
+            c.create_polygon(cx, cy-h, cx+h, cy, cx, cy+h, cx-h, cy,
+                             fill="#3a7010", outline=""),
+            c.create_oval(cx-2, cy-s+1, cx+2, cy-s+4, fill="#78d020", outline=""),
+        ]
 
     def _criar_labels(self):
-        self.lbl_perc_esq = self.canvas.create_text(
-            L_LEFT, 16, text="0%",
-            fill="#c8a800", font=("Verdana", 8, "bold"), anchor="w"
-        )
-        self.lbl_hora = self.canvas.create_text(
-            SEP_CX, 16, text="--:--",
-            fill="#3a6010", font=("Verdana", 7), anchor="center"
-        )
-        self.lbl_perc_dir = self.canvas.create_text(
-            R_RIGHT, 16, text="0%",
-            fill="#78d020", font=("Verdana", 8, "bold"), anchor="e"
-        )
-        self.lbl_status = self.canvas.create_text(
-            SEP_CX, 70, text="Aguardando início...",
-            fill="#2e5a0a", font=("Verdana", 7), anchor="center"
-        )
+        c = self.canvas
+        self.lbl_esq    = c.create_text(L_LEFT,  16, text="", fill="#c8a800",
+                                         font=("Verdana", 8, "bold"), anchor="w")
+        self.lbl_hora   = c.create_text(SEP_CX,  16, text="--:--", fill="#9060c0",
+                                         font=("Verdana", 7), anchor="center")
+        self.lbl_dir    = c.create_text(R_RIGHT, 16, text="", fill="#78d020",
+                                         font=("Verdana", 8, "bold"), anchor="e")
+        self.lbl_status = c.create_text(SEP_CX,  70, text="...", fill="#2e5a0a",
+                                         font=("Verdana", 7), anchor="center")
 
-    # ------------------------------------------------------------------
+    # ── Visibilidade ────────────────────────────────────────────────
 
-    def _mover_metade(self, items, largura, shine_pos):
-        xl = items['xl']
-        x2 = xl + largura
-        self.canvas.coords(items['glow_out'],  xl, BAR_TOP-4, x2, BAR_BOT+4)
-        self.canvas.coords(items['glow_mid'],  xl, BAR_TOP-2, x2, BAR_BOT+2)
-        self.canvas.coords(items['barra'],     xl, BAR_TOP,   x2, BAR_BOT)
-        self.canvas.coords(items['shadow'],    xl, BAR_BOT-4, x2, BAR_BOT)
-        self.canvas.coords(items['highlight'], xl, BAR_TOP,   x2, BAR_TOP+5)
-        self.canvas.coords(items['topline'],   xl, BAR_TOP,   x2, BAR_TOP+2)
-        if largura > 4:
-            self.canvas.coords(items['edge'], x2-3, BAR_TOP-4, x2, BAR_BOT+4)
+    def _set_pur_visible(self, show):
+        st = 'normal' if show else 'hidden'
+        for k in ANIM_KEYS:
+            self.canvas.itemconfig(self.pur[k], state=st)
+
+    def _set_sep_visible(self, show):
+        st = 'normal' if show else 'hidden'
+        for item in self.sep:
+            self.canvas.itemconfig(item, state=st)
+
+    # ── Geometria dos halves ─────────────────────────────────────────
+
+    def _set_width(self, half, largura):
+        xl, x2 = half['xl'], half['xl'] + largura
+        c = self.canvas
+        c.coords(half['glow_out'],  xl, BAR_TOP-4, x2, BAR_BOT+4)
+        c.coords(half['glow_mid'],  xl, BAR_TOP-2, x2, BAR_BOT+2)
+        c.coords(half['barra'],     xl, BAR_TOP,   x2, BAR_BOT)
+        c.coords(half['shadow'],    xl, BAR_BOT-4, x2, BAR_BOT)
+        c.coords(half['highlight'], xl, BAR_TOP,   x2, BAR_TOP+5)
+        c.coords(half['topline'],   xl, BAR_TOP,   x2, BAR_TOP+2)
+
+    def _set_anim(self, half, largura, shine_pos, ativo):
+        """Atualiza shine e edge branca. ativo=False zera ambos."""
+        xl, x2 = half['xl'], half['xl'] + largura
+        c = self.canvas
+        if ativo and largura > 4:
+            c.coords(half['edge'], x2-3, BAR_TOP-4, x2, BAR_BOT+4)
         else:
-            self.canvas.coords(items['edge'], 0, 0, 0, 0)
-        # shine
-        if largura > 10:
+            c.coords(half['edge'], 0, 0, 0, 0)
+        if ativo and largura > 10:
             s1 = max(xl, xl + shine_pos - 18)
             s2 = min(x2, xl + shine_pos + 18)
             if s2 > s1:
-                self.canvas.coords(items['shine'], s1, BAR_TOP, s2, BAR_BOT)
+                c.coords(half['shine'], s1, BAR_TOP, s2, BAR_BOT)
                 return
-        self.canvas.coords(items['shine'], 0, 0, 0, 0)
+        c.coords(half['shine'], 0, 0, 0, 0)
 
-    def _spawn_sparkle(self, xl, largura, cor):
-        if largura < 12:
+    # ── Animação ────────────────────────────────────────────────────
+
+    def _spawn(self, xl, larg, cor):
+        if larg < 12:
             return
-        x  = xl + random.randint(3, int(largura) - 3)
+        x  = xl + random.randint(3, int(larg) - 3)
         y  = random.randint(BAR_TOP + 2, BAR_BOT - 2)
         sz = random.randint(1, 2)
         item = self.canvas.create_oval(x-sz, y-sz, x+sz, y+sz, fill=cor, outline="")
         self.sparkles.append([item, random.randint(6, 18)])
 
     def animar(self):
-        # Avançar shines
-        if self.larg_esq > 10:
+        e = self.estado
+        purple = e in PURPLE_STATES
+
+        if e == MORNING:
             self.shine_l += 5
-            if self.shine_l > self.larg_esq + 30:
-                self.shine_l = -30
-        if self.larg_dir > 10:
+            if self.shine_l > self.larg_esq + 30: self.shine_l = -30
+            if random.random() < 0.20: self._spawn(L_LEFT, self.larg_esq, YEL['sp'])
+        elif e == AFTERNOON:
             self.shine_r += 5
-            if self.shine_r > self.larg_dir + 30:
-                self.shine_r = -30
+            if self.shine_r > self.larg_dir + 30: self.shine_r = -30
+            if random.random() < 0.20: self._spawn(R_LEFT, self.larg_dir, GRN['sp'])
+        elif purple:
+            self.shine_p += 5
+            if self.shine_p > P_WIDTH + 30: self.shine_p = -30
+            if random.random() < 0.20: self._spawn(P_LEFT, P_WIDTH, PUR['sp'])
 
-        self._mover_metade(self.esq, self.larg_esq, self.shine_l)
-        self._mover_metade(self.dir, self.larg_dir, self.shine_r)
-
-        # Sparkles
-        if random.random() < 0.20:
-            self._spawn_sparkle(L_LEFT, self.larg_esq, YEL_SPARKLE)
-        if random.random() < 0.20:
-            self._spawn_sparkle(R_LEFT, self.larg_dir, GRN_SPARKLE)
+        # Shine e edge: só na metade ativa
+        self._set_anim(self.esq, self.larg_esq, self.shine_l, e == MORNING)
+        self._set_anim(self.dir, self.larg_dir,  self.shine_r, e == AFTERNOON)
+        self._set_anim(self.pur, P_WIDTH,         self.shine_p, purple)
 
         vivos = []
         for s in self.sparkles:
@@ -204,46 +211,73 @@ class BarraIntegral:
 
         self.root.after(50, self.animar)
 
-    def atualizar(self):
-        agora  = datetime.now()
-        hora   = agora.hour
-        minuto = agora.minute
-        m      = hora * 60 + minuto
+    # ── Lógica de tempo ─────────────────────────────────────────────
 
-        ini_m = 8 * 60    # 480
-        fim_m = 12 * 60   # 720
-        ini_t = 13 * 60   # 780
-        fim_t = 17 * 60   # 1020
+    def atualizar(self):
+        agora        = datetime.now()
+        hora, minuto = agora.hour, agora.minute
+        m            = hora * 60 + minuto
+
+        ini_m, fim_m = 8*60,  12*60
+        ini_t, fim_t = 13*60, 17*60
+
+        ant = self.estado
 
         if m < ini_m:
-            perc_esq, perc_dir = 0, 0
-            status = "Aguardando início..."
+            self.estado = WAITING
+            pe, pd = 0, 0
+            status = "Aguardando início  •  aula começa às 08:00"
         elif m <= fim_m:
-            perc_esq = int(((m - ini_m) / (fim_m - ini_m)) * 100)
-            perc_dir = 0
+            self.estado = MORNING
+            pe = int(((m - ini_m) / (fim_m - ini_m)) * 100)
+            pd = 0
             status = "1ª Metade  •  08:00 – 12:00"
         elif m < ini_t:
-            perc_esq, perc_dir = 100, 0
+            self.estado = BREAK
+            pe, pd = 100, 0
             status = "Intervalo  •  retoma às 13:00"
         elif m <= fim_t:
-            perc_esq = 100
-            perc_dir = int(((m - ini_t) / (fim_t - ini_t)) * 100)
+            self.estado = AFTERNOON
+            pe = 100
+            pd = int(((m - ini_t) / (fim_t - ini_t)) * 100)
             status = "2ª Metade  •  13:00 – 17:00"
         else:
-            perc_esq, perc_dir = 100, 100
+            self.estado = DONE
+            pe, pd = 100, 100
             status = "Concluído!"
 
-        self.larg_esq = (perc_esq / 100) * L_WIDTH
-        self.larg_dir = (perc_dir / 100) * R_WIDTH
+        if self.estado != ant:
+            for s in self.sparkles: self.canvas.delete(s[0])
+            self.sparkles = []
 
-        self.canvas.itemconfig(self.lbl_perc_esq, text=f"{perc_esq}%")
-        self.canvas.itemconfig(self.lbl_perc_dir, text=f"{perc_dir}%")
-        self.canvas.itemconfig(self.lbl_hora,     text=f"{hora:02d}:{minuto:02d}")
-        self.canvas.itemconfig(self.lbl_status,   text=status)
+        purple = self.estado in PURPLE_STATES
+
+        self.larg_esq = (pe / 100) * L_WIDTH
+        self.larg_dir = (pd / 100) * R_WIDTH
+
+        self._set_width(self.esq, self.larg_esq)
+        self._set_width(self.dir, self.larg_dir)
+        self._set_width(self.pur, P_WIDTH)
+
+        self._set_pur_visible(purple)
+        self._set_sep_visible(not purple)
+
+        c = self.canvas
+        if purple:
+            c.itemconfig(self.lbl_esq,  text="")
+            c.itemconfig(self.lbl_dir,  text="")
+            c.itemconfig(self.lbl_hora, fill="#9060c0")
+        else:
+            c.itemconfig(self.lbl_esq,  text=f"{pe}%")
+            c.itemconfig(self.lbl_dir,  text=f"{pd}%")
+            c.itemconfig(self.lbl_hora, fill="#3a6010")
+
+        c.itemconfig(self.lbl_hora,   text=f"{hora:02d}:{minuto:02d}")
+        c.itemconfig(self.lbl_status, text=status)
 
         self.root.after(1000, self.atualizar)
 
-    # ------------------------------------------------------------------
+    # ── Drag ────────────────────────────────────────────────────────
 
     def drag_start(self, event):
         self.drag_data['x'] = event.x
