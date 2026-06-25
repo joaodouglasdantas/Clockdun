@@ -61,6 +61,7 @@ class BarraIntegral:
         self.pur = self._mk_half(P_LEFT, P_RIGHT, PUR, with_bg=False)
         self._criar_labels()
         self._criar_mini()
+        self.canvas.create_rectangle(1, 1, W-1, H-1, outline="#2a5010", fill="", width=1)
 
         self.estado     = WAITING
         self.shine_l    = -25.0

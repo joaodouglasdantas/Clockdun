@@ -45,6 +45,8 @@ class BarraWidget:
         self.pur = self._mk_bar(PUR, with_bg=False)
         self._criar_labels()
         self._criar_mini()
+        # Borda da janela — sempre no topo do z-order
+        self.canvas.create_rectangle(1, 1, W-1, H-1, outline="#2a5010", fill="", width=1)
 
         self.estado     = WAITING
         self.shine_g    = -25.0
