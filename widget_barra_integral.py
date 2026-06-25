@@ -150,7 +150,11 @@ class BarraIntegral:
         st = 'normal' if self.minimizado else 'hidden'
         for item in (self.mini_fundo, self.mini_bar_esq, self.mini_bar_dir, self.mini_bar_pur):
             self.canvas.itemconfig(item, state=st)
-        self.root.geometry(f"{W}x{MINI_H if self.minimizado else H}")
+        x, y = self.root.winfo_x(), self.root.winfo_y()
+        if self.minimizado:
+            self.root.geometry(f"{W}x{MINI_H}+{x}+{y + H - MINI_H}")
+        else:
+            self.root.geometry(f"{W}x{H}+{x}+{y - H + MINI_H}")
 
     def _atualizar_mini(self, pe, pd, purple):
         mid = W // 2

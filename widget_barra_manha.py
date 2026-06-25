@@ -142,7 +142,11 @@ class BarraManha:
         st = 'normal' if self.minimizado else 'hidden'
         self.canvas.itemconfig(self.mini_fundo, state=st)
         self.canvas.itemconfig(self.mini_bar,   state=st)
-        self.root.geometry(f"{W}x{MINI_H if self.minimizado else H}")
+        x, y = self.root.winfo_x(), self.root.winfo_y()
+        if self.minimizado:
+            self.root.geometry(f"{W}x{MINI_H}+{x}+{y + H - MINI_H}")
+        else:
+            self.root.geometry(f"{W}x{H}+{x}+{y - H + MINI_H}")
 
     def _atualizar_mini(self, percentual, purple):
         if purple:
