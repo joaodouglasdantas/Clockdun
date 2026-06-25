@@ -7,26 +7,25 @@ SIMS_BG     = "#040803"
 SIMS_PANEL  = "#060c02"
 SIMS_BORDER = "#1c3c08"
 
-GRN = dict(bar="#5ec400", go="#0d2a00", gm="#2d6e00",
-           hl="#aaee40", tl="#e8ff90", sh="#d0f870", sw="#2a6000", sp="#c8ff50")
+YEL = dict(bar="#d4b800", go="#2a2200", gm="#5e4e00",
+           hl="#fff080", tl="#ffffc0", sh="#ffff90", sw="#604e00", sp="#ffe050")
 PUR = dict(bar="#8b2fc9", go="#1a0530", gm="#4a1070",
            hl="#cc88ff", tl="#eebbff", sh="#dd99ff", sw="#3a0a60", sp="#cc77ff")
 
 # ── Geometria ───────────────────────────────────────────────────────
-W, H           = 400, 80
-BAR_LEFT       = 14
-BAR_RIGHT      = 386
+W, H             = 400, 80
+BAR_LEFT         = 14
+BAR_RIGHT        = 386
 BAR_TOP, BAR_BOT = 36, 54
-BAR_WIDTH      = BAR_RIGHT - BAR_LEFT
+BAR_WIDTH        = BAR_RIGHT - BAR_LEFT
 
 ANIM_KEYS = ('glow_out','glow_mid','barra','shadow','highlight','topline','edge','shine')
 
-# ── Estados ─────────────────────────────────────────────────────────
 WAITING, ACTIVE, DONE = "waiting", "active", "done"
 PURPLE_STATES = {WAITING, DONE}
 
 
-class BarraWidget:
+class BarraManha:
     def __init__(self, root):
         self.root = root
         self.root.geometry(f"{W}x{H}")
@@ -40,20 +39,17 @@ class BarraWidget:
                                 bg=SIMS_BG, highlightthickness=0, bd=0)
         self.canvas.pack()
 
-        # Z-order: fundo → grn → pur → labels
-        # pur oculto = grn aparece; pur visível = cobre grn
         self._criar_fundo()
-        self.grn = self._mk_bar(GRN, with_bg=True)
+        self.yel = self._mk_bar(YEL, with_bg=True)
         self.pur = self._mk_bar(PUR, with_bg=False)
         self._criar_labels()
 
         self.estado   = WAITING
-        self.shine_g  = -25.0
+        self.shine_y  = -25.0
         self.shine_p  = -25.0
         self.largura  = 0.0
         self.sparkles = []
 
-        # Inicia em roxo
         self._set_pur_visible(True)
         self._set_width(self.pur, BAR_WIDTH)
 
@@ -90,12 +86,12 @@ class BarraWidget:
 
     def _criar_labels(self):
         c = self.canvas
-        self.lbl_perc   = c.create_text(BAR_LEFT, 16, text="",     fill="#78d020",
+        self.lbl_perc   = c.create_text(BAR_LEFT,  16, text="",      fill="#c8a800",
                                          font=("Verdana", 8, "bold"), anchor="w")
         self.lbl_hora   = c.create_text(BAR_RIGHT, 16, text="--:--", fill="#9060c0",
-                                         font=("Verdana", 8), anchor="e")
-        self.lbl_status = c.create_text(W//2, 70, text="...",       fill="#2e5a0a",
-                                         font=("Verdana", 7), anchor="center")
+                                         font=("Verdana", 8),         anchor="e")
+        self.lbl_status = c.create_text(W // 2,    70, text="...",   fill="#2e5a0a",
+                                         font=("Verdana", 7),         anchor="center")
 
     # ── Visibilidade ────────────────────────────────────────────────
 
@@ -147,16 +143,16 @@ class BarraWidget:
         purple = e in PURPLE_STATES
 
         if e == ACTIVE:
-            self.shine_g += 5
-            if self.shine_g > self.largura + 30: self.shine_g = -30
-            if random.random() < 0.22: self._spawn(self.largura, GRN['sp'])
+            self.shine_y += 5
+            if self.shine_y > self.largura + 30: self.shine_y = -30
+            if random.random() < 0.22: self._spawn(self.largura, YEL['sp'])
         elif purple:
             self.shine_p += 5
             if self.shine_p > BAR_WIDTH + 30: self.shine_p = -30
             if random.random() < 0.20: self._spawn(BAR_WIDTH, PUR['sp'])
 
-        self._set_anim(self.grn, self.largura,  self.shine_g, e == ACTIVE)
-        self._set_anim(self.pur, BAR_WIDTH,     self.shine_p, purple)
+        self._set_anim(self.yel, self.largura, self.shine_y, e == ACTIVE)
+        self._set_anim(self.pur, BAR_WIDTH,    self.shine_p, purple)
 
         vivos = []
         for s in self.sparkles:
@@ -176,24 +172,24 @@ class BarraWidget:
         hora, minuto = agora.hour, agora.minute
         m            = hora * 60 + minuto
 
-        inicio  = 13 * 60   # 780
-        fim     = 17 * 60   # 1020
+        inicio  = 8 * 60    # 480
+        fim     = 12 * 60   # 720
         duracao = fim - inicio
 
         ant = self.estado
 
         if m < inicio:
-            self.estado  = WAITING
-            percentual   = 0
-            status       = "Aguardando início  •  aula começa às 13:00"
+            self.estado = WAITING
+            percentual  = 0
+            status      = "Aguardando início  •  aula começa às 08:00"
         elif m >= fim:
-            self.estado  = DONE
-            percentual   = 100
-            status       = "Tarde concluída!"
+            self.estado = DONE
+            percentual  = 100
+            status      = "Manhã concluída!"
         else:
-            self.estado  = ACTIVE
-            percentual   = int(((m - inicio) / duracao) * 100)
-            status       = "Período da tarde  •  13:00 – 17:00"
+            self.estado = ACTIVE
+            percentual  = int(((m - inicio) / duracao) * 100)
+            status      = "Período da manhã  •  08:00 – 12:00"
 
         if self.estado != ant:
             for s in self.sparkles: self.canvas.delete(s[0])
@@ -202,7 +198,7 @@ class BarraWidget:
         purple = self.estado in PURPLE_STATES
 
         self.largura = (percentual / 100) * BAR_WIDTH
-        self._set_width(self.grn, self.largura)
+        self._set_width(self.yel, self.largura)
         self._set_width(self.pur, BAR_WIDTH)
 
         self._set_pur_visible(purple)
@@ -213,7 +209,7 @@ class BarraWidget:
             c.itemconfig(self.lbl_hora, fill="#9060c0")
         else:
             c.itemconfig(self.lbl_perc, text=f"{percentual}%")
-            c.itemconfig(self.lbl_hora, fill="#4a8015")
+            c.itemconfig(self.lbl_hora, fill="#9a8010")
 
         c.itemconfig(self.lbl_hora,   text=f"{hora:02d}:{minuto:02d}")
         c.itemconfig(self.lbl_status, text=status)
@@ -234,5 +230,5 @@ class BarraWidget:
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = BarraWidget(root)
+    app = BarraManha(root)
     root.mainloop()
