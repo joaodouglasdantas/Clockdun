@@ -14,13 +14,13 @@ PUR = dict(bar="#8b2fc9", go="#1a0530", gm="#4a1070",
 
 # ── Geometria ───────────────────────────────────────────────────────
 W, H             = 400, 80
+MINI_H           = 8
 BAR_LEFT         = 14
 BAR_RIGHT        = 386
 BAR_TOP, BAR_BOT = 36, 54
 BAR_WIDTH        = BAR_RIGHT - BAR_LEFT
 
-ANIM_KEYS = ('glow_out','glow_mid','barra','shadow','highlight','topline','edge','shine')
-
+ANIM_KEYS    = ('glow_out','glow_mid','barra','shadow','highlight','topline','edge','shine')
 WAITING, ACTIVE, DONE = "waiting", "active", "done"
 PURPLE_STATES = {WAITING, DONE}
 
@@ -43,12 +43,14 @@ class BarraManha:
         self.yel = self._mk_bar(YEL, with_bg=True)
         self.pur = self._mk_bar(PUR, with_bg=False)
         self._criar_labels()
+        self._criar_mini()
 
-        self.estado   = WAITING
-        self.shine_y  = -25.0
-        self.shine_p  = -25.0
-        self.largura  = 0.0
-        self.sparkles = []
+        self.estado     = WAITING
+        self.shine_y    = -25.0
+        self.shine_p    = -25.0
+        self.largura    = 0.0
+        self.sparkles   = []
+        self.minimizado = False
 
         self._set_pur_visible(True)
         self._set_width(self.pur, BAR_WIDTH)
@@ -58,6 +60,7 @@ class BarraManha:
 
         self.root.bind('<Button-1>', self.drag_start)
         self.root.bind('<B1-Motion>', self.drag_motion)
+        self.root.bind('<Button-3>', self.toggle_mini)
         self.drag_data = {'x': 0, 'y': 0}
 
     # ── Construtores ────────────────────────────────────────────────
@@ -93,6 +96,11 @@ class BarraManha:
         self.lbl_status = c.create_text(W // 2,    70, text="...",   fill="#2e5a0a",
                                          font=("Verdana", 7),         anchor="center")
 
+    def _criar_mini(self):
+        c = self.canvas
+        self.mini_fundo = c.create_rectangle(0, 0, W, MINI_H, fill="#04080a", outline="", state='hidden')
+        self.mini_bar   = c.create_rectangle(0, 0, 0, MINI_H, fill="",        outline="", state='hidden')
+
     # ── Visibilidade ────────────────────────────────────────────────
 
     def _set_pur_visible(self, show):
@@ -126,6 +134,24 @@ class BarraManha:
                 c.coords(bar['shine'], s1, BAR_TOP, s2, BAR_BOT)
                 return
         c.coords(bar['shine'], 0, 0, 0, 0)
+
+    # ── Mini mode ───────────────────────────────────────────────────
+
+    def toggle_mini(self, event=None):
+        self.minimizado = not self.minimizado
+        st = 'normal' if self.minimizado else 'hidden'
+        self.canvas.itemconfig(self.mini_fundo, state=st)
+        self.canvas.itemconfig(self.mini_bar,   state=st)
+        self.root.geometry(f"{W}x{MINI_H if self.minimizado else H}")
+
+    def _atualizar_mini(self, percentual, purple):
+        if purple:
+            self.canvas.coords(self.mini_bar, 0, 0, W, MINI_H)
+            self.canvas.itemconfig(self.mini_bar, fill=PUR['bar'])
+        else:
+            mini_w = (percentual / 100) * W
+            self.canvas.coords(self.mini_bar, 0, 0, mini_w, MINI_H)
+            self.canvas.itemconfig(self.mini_bar, fill=YEL['bar'])
 
     # ── Animação ────────────────────────────────────────────────────
 
@@ -200,8 +226,8 @@ class BarraManha:
         self.largura = (percentual / 100) * BAR_WIDTH
         self._set_width(self.yel, self.largura)
         self._set_width(self.pur, BAR_WIDTH)
-
         self._set_pur_visible(purple)
+        self._atualizar_mini(percentual, purple)
 
         c = self.canvas
         if purple:

@@ -13,15 +13,14 @@ PUR = dict(bar="#8b2fc9", go="#1a0530", gm="#4a1070",
            hl="#cc88ff", tl="#eebbff", sh="#dd99ff", sw="#3a0a60", sp="#cc77ff")
 
 # ── Geometria ───────────────────────────────────────────────────────
-W, H           = 400, 80
-BAR_LEFT       = 14
-BAR_RIGHT      = 386
+W, H             = 400, 80
+MINI_H           = 8
+BAR_LEFT         = 14
+BAR_RIGHT        = 386
 BAR_TOP, BAR_BOT = 36, 54
-BAR_WIDTH      = BAR_RIGHT - BAR_LEFT
+BAR_WIDTH        = BAR_RIGHT - BAR_LEFT
 
-ANIM_KEYS = ('glow_out','glow_mid','barra','shadow','highlight','topline','edge','shine')
-
-# ── Estados ─────────────────────────────────────────────────────────
+ANIM_KEYS    = ('glow_out','glow_mid','barra','shadow','highlight','topline','edge','shine')
 WAITING, ACTIVE, DONE = "waiting", "active", "done"
 PURPLE_STATES = {WAITING, DONE}
 
@@ -40,20 +39,20 @@ class BarraWidget:
                                 bg=SIMS_BG, highlightthickness=0, bd=0)
         self.canvas.pack()
 
-        # Z-order: fundo → grn → pur → labels
-        # pur oculto = grn aparece; pur visível = cobre grn
+        # Z-order: fundo → grn → pur → labels → mini (sempre no topo)
         self._criar_fundo()
         self.grn = self._mk_bar(GRN, with_bg=True)
         self.pur = self._mk_bar(PUR, with_bg=False)
         self._criar_labels()
+        self._criar_mini()
 
-        self.estado   = WAITING
-        self.shine_g  = -25.0
-        self.shine_p  = -25.0
-        self.largura  = 0.0
-        self.sparkles = []
+        self.estado     = WAITING
+        self.shine_g    = -25.0
+        self.shine_p    = -25.0
+        self.largura    = 0.0
+        self.sparkles   = []
+        self.minimizado = False
 
-        # Inicia em roxo
         self._set_pur_visible(True)
         self._set_width(self.pur, BAR_WIDTH)
 
@@ -62,6 +61,7 @@ class BarraWidget:
 
         self.root.bind('<Button-1>', self.drag_start)
         self.root.bind('<B1-Motion>', self.drag_motion)
+        self.root.bind('<Button-3>', self.toggle_mini)
         self.drag_data = {'x': 0, 'y': 0}
 
     # ── Construtores ────────────────────────────────────────────────
@@ -90,12 +90,18 @@ class BarraWidget:
 
     def _criar_labels(self):
         c = self.canvas
-        self.lbl_perc   = c.create_text(BAR_LEFT, 16, text="",     fill="#78d020",
+        self.lbl_perc   = c.create_text(BAR_LEFT,  16, text="",      fill="#78d020",
                                          font=("Verdana", 8, "bold"), anchor="w")
         self.lbl_hora   = c.create_text(BAR_RIGHT, 16, text="--:--", fill="#9060c0",
-                                         font=("Verdana", 8), anchor="e")
-        self.lbl_status = c.create_text(W//2, 70, text="...",       fill="#2e5a0a",
-                                         font=("Verdana", 7), anchor="center")
+                                         font=("Verdana", 8),         anchor="e")
+        self.lbl_status = c.create_text(W // 2,    70, text="...",   fill="#2e5a0a",
+                                         font=("Verdana", 7),         anchor="center")
+
+    def _criar_mini(self):
+        """Faixa fina exibida quando minimizado (y=0..MINI_H)."""
+        c = self.canvas
+        self.mini_fundo = c.create_rectangle(0, 0, W, MINI_H, fill="#04080a", outline="", state='hidden')
+        self.mini_bar   = c.create_rectangle(0, 0, 0, MINI_H, fill="",        outline="", state='hidden')
 
     # ── Visibilidade ────────────────────────────────────────────────
 
@@ -131,6 +137,24 @@ class BarraWidget:
                 return
         c.coords(bar['shine'], 0, 0, 0, 0)
 
+    # ── Mini mode ───────────────────────────────────────────────────
+
+    def toggle_mini(self, event=None):
+        self.minimizado = not self.minimizado
+        st = 'normal' if self.minimizado else 'hidden'
+        self.canvas.itemconfig(self.mini_fundo, state=st)
+        self.canvas.itemconfig(self.mini_bar,   state=st)
+        self.root.geometry(f"{W}x{MINI_H if self.minimizado else H}")
+
+    def _atualizar_mini(self, percentual, purple):
+        if purple:
+            self.canvas.coords(self.mini_bar, 0, 0, W, MINI_H)
+            self.canvas.itemconfig(self.mini_bar, fill=PUR['bar'])
+        else:
+            mini_w = (percentual / 100) * W
+            self.canvas.coords(self.mini_bar, 0, 0, mini_w, MINI_H)
+            self.canvas.itemconfig(self.mini_bar, fill=GRN['bar'])
+
     # ── Animação ────────────────────────────────────────────────────
 
     def _spawn(self, largura, cor):
@@ -155,8 +179,8 @@ class BarraWidget:
             if self.shine_p > BAR_WIDTH + 30: self.shine_p = -30
             if random.random() < 0.20: self._spawn(BAR_WIDTH, PUR['sp'])
 
-        self._set_anim(self.grn, self.largura,  self.shine_g, e == ACTIVE)
-        self._set_anim(self.pur, BAR_WIDTH,     self.shine_p, purple)
+        self._set_anim(self.grn, self.largura, self.shine_g, e == ACTIVE)
+        self._set_anim(self.pur, BAR_WIDTH,    self.shine_p, purple)
 
         vivos = []
         for s in self.sparkles:
@@ -183,17 +207,17 @@ class BarraWidget:
         ant = self.estado
 
         if m < inicio:
-            self.estado  = WAITING
-            percentual   = 0
-            status       = "Aguardando início  •  aula começa às 13:00"
+            self.estado = WAITING
+            percentual  = 0
+            status      = "Aguardando início  •  aula começa às 13:00"
         elif m >= fim:
-            self.estado  = DONE
-            percentual   = 100
-            status       = "Tarde concluída!"
+            self.estado = DONE
+            percentual  = 100
+            status      = "Tarde concluída!"
         else:
-            self.estado  = ACTIVE
-            percentual   = int(((m - inicio) / duracao) * 100)
-            status       = "Período da tarde  •  13:00 – 17:00"
+            self.estado = ACTIVE
+            percentual  = int(((m - inicio) / duracao) * 100)
+            status      = "Período da tarde  •  13:00 – 17:00"
 
         if self.estado != ant:
             for s in self.sparkles: self.canvas.delete(s[0])
@@ -204,8 +228,8 @@ class BarraWidget:
         self.largura = (percentual / 100) * BAR_WIDTH
         self._set_width(self.grn, self.largura)
         self._set_width(self.pur, BAR_WIDTH)
-
         self._set_pur_visible(purple)
+        self._atualizar_mini(percentual, purple)
 
         c = self.canvas
         if purple:

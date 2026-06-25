@@ -18,6 +18,8 @@ PUR = dict(bar="#8b2fc9", go="#1a0530", gm="#4a1070",
 WAITING, MORNING, BREAK, AFTERNOON, DONE = "waiting","morning","break","afternoon","done"
 PURPLE_STATES = {WAITING, BREAK, DONE}
 
+MINI_H = 8
+
 # ── Geometria ───────────────────────────────────────────────────────
 W, H           = 420, 80
 BAR_TOP, BAR_BOT = 36, 54
@@ -58,14 +60,16 @@ class BarraIntegral:
         self.sep = self._criar_sep()
         self.pur = self._mk_half(P_LEFT, P_RIGHT, PUR, with_bg=False)
         self._criar_labels()
+        self._criar_mini()
 
-        self.estado   = WAITING
-        self.shine_l  = -25.0
-        self.shine_r  = -25.0
-        self.shine_p  = -25.0
-        self.larg_esq = 0.0
-        self.larg_dir = 0.0
-        self.sparkles = []
+        self.estado     = WAITING
+        self.shine_l    = -25.0
+        self.shine_r    = -25.0
+        self.shine_p    = -25.0
+        self.larg_esq   = 0.0
+        self.larg_dir   = 0.0
+        self.sparkles   = []
+        self.minimizado = False
 
         # Estado inicial roxo
         self._set_pur_visible(True)
@@ -77,9 +81,21 @@ class BarraIntegral:
 
         self.root.bind('<Button-1>', self.drag_start)
         self.root.bind('<B1-Motion>', self.drag_motion)
+        self.root.bind('<Button-3>', self.toggle_mini)
         self.drag_data = {'x': 0, 'y': 0}
 
     # ── Construtores ────────────────────────────────────────────────
+
+    def _criar_mini(self):
+        """Faixa fina (MINI_H px) exibida quando minimizado.
+        Lado esquerdo = amarelo (manhã), lado direito = verde (tarde).
+        Durante roxo: barra roxa full width."""
+        c = self.canvas
+        mid = W // 2
+        self.mini_fundo  = c.create_rectangle(0, 0, W,   MINI_H, fill="#04080a", outline="", state='hidden')
+        self.mini_bar_esq= c.create_rectangle(0, 0, 0,   MINI_H, fill=YEL['bar'], outline="", state='hidden')
+        self.mini_bar_dir= c.create_rectangle(mid, 0, mid, MINI_H, fill=GRN['bar'], outline="", state='hidden')
+        self.mini_bar_pur= c.create_rectangle(0, 0, 0,   MINI_H, fill=PUR['bar'], outline="", state='hidden')
 
     def _criar_fundo(self):
         c = self.canvas
@@ -126,6 +142,30 @@ class BarraIntegral:
                                          font=("Verdana", 8, "bold"), anchor="e")
         self.lbl_status = c.create_text(SEP_CX,  70, text="...", fill="#2e5a0a",
                                          font=("Verdana", 7), anchor="center")
+
+    # ── Mini mode ───────────────────────────────────────────────────
+
+    def toggle_mini(self, event=None):
+        self.minimizado = not self.minimizado
+        st = 'normal' if self.minimizado else 'hidden'
+        for item in (self.mini_fundo, self.mini_bar_esq, self.mini_bar_dir, self.mini_bar_pur):
+            self.canvas.itemconfig(item, state=st)
+        self.root.geometry(f"{W}x{MINI_H if self.minimizado else H}")
+
+    def _atualizar_mini(self, pe, pd, purple):
+        mid = W // 2
+        if purple:
+            self.canvas.coords(self.mini_bar_pur, 0, 0, W, MINI_H)
+            self.canvas.coords(self.mini_bar_esq, 0, 0, 0, MINI_H)
+            self.canvas.coords(self.mini_bar_dir, mid, 0, mid, MINI_H)
+        else:
+            self.canvas.coords(self.mini_bar_pur, 0, 0, 0, MINI_H)
+            # Esquerda: amarelo, 0..mid proporcional a pe
+            esq_w = (pe / 100) * mid
+            self.canvas.coords(self.mini_bar_esq, 0, 0, esq_w, MINI_H)
+            # Direita: verde, mid..W proporcional a pd
+            dir_w = (pd / 100) * mid
+            self.canvas.coords(self.mini_bar_dir, mid, 0, mid + dir_w, MINI_H)
 
     # ── Visibilidade ────────────────────────────────────────────────
 
@@ -261,6 +301,7 @@ class BarraIntegral:
 
         self._set_pur_visible(purple)
         self._set_sep_visible(not purple)
+        self._atualizar_mini(pe, pd, purple)
 
         c = self.canvas
         if purple:
